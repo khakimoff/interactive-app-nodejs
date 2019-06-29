@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Система контроля образовательных знаний</title>
+    <link rel="shortcut icon" href="./public/img/favicon.ico">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="/public/css/style.css">
+  </head>
+  <body>
+    <% include block/header.ejs %>
+    <main class="main">
+      <form class="main_form" method="post" action="/login">
+        <p>Войдите, чтобы продолжить</p>
+				<%
+					if (typeof status !== 'undefined') switch (status) {
+					case 404:
+					%>
+					<p class="error">Пользователь не найден</p>
+					<%
+					break;
+					case 403:
+					%>
+					<p class="error">Неверно введен пароль</p>
+					<%
+					break;
+					}
+				%>
+        <div class="form-group">
+          <!-- <label for="exampleInputEmail1">Логин</label> -->
+          <input type="text" name="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" placeholder="Логин">
+          <!-- <small id="emailHelp" class="form-text text-muted">We'll never share your email with anyone else.</small> -->
+        </div>
+        <div class="form-group">
+          <!-- <label for="exampleInputPassword1">Пароль</label> -->
+          <input type="password" name='pass' class="form-control" id="exampleInputPassword1" placeholder="Пароль">
+        </div>
+        <div class="form-group form-check">
+          <!-- <input type="checkbox" name='check' class="form-check-input" id="exampleCheck1"> -->
+          <!-- <label class="form-check-label" for="exampleCheck1">Check me out</label> -->
+        </div>
+        <button type="submit" class="btn btn-primary">Войти</button>
+      </form>
+    </main>
+    <% include block/footer.ejs %>
+  </body>
+</html>

@@ -1,0 +1,292 @@
+const express = require('express');
+const fs = require('fs')
+const path = require('path')
+
+const bodyParser = require('body-parser');
+
+const multer = require('multer')
+const upload = multer({ dest: 'temp_uploads' })
+/**
+ * Локальный импорт файла базы с данными
+ * lowdb библиотека на данный момент
+ */
+const db = require('./server/db')
+
+const app = express();
+const urlencodedParser = bodyParser.urlencoded({ extended: false });
+
+app.set('view engine', 'ejs');
+
+app.use('/public', express.static('public'));
+
+/**
+ * Middleware авторизации, чекает куку, чекает наличие пользователя,
+ * в случае успеха пишет в req.user все данные,
+ * в случае провала возвращает обратно на форму
+ */
+const authorize = (req, res, next) => {
+	// don't act on index
+	if (['/', '/login'].includes(req.path))
+		return next()
+
+	const cookie = req.headers.cookie
+	const auth = cookie.split(/;\s?/).find(a => a.indexOf('auth') > -1)
+
+	if (!auth)
+		return res.status(403).redirect('/')
+
+	const login = auth.split('=')[1].toString().trim()
+
+	if (!login)
+		return res.status(403).redirect('/')
+
+	const user = db.get('users').find({ login }).value()
+	if (!user)
+		return res.status(403).redirect('/')
+
+		// console.log(user)
+	req.user = user
+	next()
+}
+
+/**
+ * Использовать middleware "авторизации" на всем прииложении,
+ * допустимо учитывая что приложение закрытое - только форма логина доступна без пароля,
+ * куда пользователя и отправляет без наличия куки
+ */
+app.use(authorize)
+
+app.get('/', (req, res) => {
+	// if (!req.user)
+	return res.render('index');
+});
+
+/**
+ * Главный маршрут, кабинет aka дашборд
+ * По типу авторизованного пользователя проверяет какой вариант кабинета показать
+ */
+app.get('/cabinet', (req, res) => {
+	const user = req.user
+
+	switch (user.level) {
+	case 'teacher':
+		const students = db.get('users').filter({ level: 'student' }).value()
+		return res.render('teacher', { user, students })
+	case 'student':
+		return res.render('student', { user })
+	default:
+		// unexpected error - user doesn't have supported level set
+		return res.status('500').render('index')
+	}
+})
+
+/**
+ * Часть системы авторизации, проверяет что переданы все параметры,
+ * что пользователь есть,
+ * и что пароль совпадает
+ * после чего пишет очень безопасную куку с логином пользователя,
+ * и отправляет пользователя в кабинет
+ */
+app.post('/login', urlencodedParser, function(req, res) {
+  if(!req.body)
+		return res.status(400).end()
+
+	const login = req.body.email.toString().toLowerCase()
+
+	const user = db.get('users').find({ login }).value()
+
+	if (!user) {
+		res.status(404)
+		// TODO need error view
+		// return res.render('user-not-found')
+		return res.render('index', { status: 404 })
+	}
+
+	if (user.pass !== req.body.pass) {
+		res.status(403)
+		return res.render('index', { status: 403 })
+	}
+
+	// very secure)
+	res.cookie('auth', user.login)
+	res.redirect('/cabinet')
+});
+
+/**
+ * Часть системы авторизации, "выход" из учетной - просто очистка куки с логином
+ */
+app.get('/logout', (req, res) => {
+	res.clearCookie('auth')
+	res.redirect('/')
+})
+
+
+/**
+ * Метод сохранения файла в папку студента, типо "чтобы студенты не могли смотреть чужие задания",
+ * но функционала проверки доступа пользователя к маршруту нету
+ * @param {string} student
+ * @param {any} file
+ * @param {'task'|'complete'|'review'} type
+ */
+const saveFile = (student, file, type = 'task') => {
+	const studentFolder = path.resolve(__dirname, `public/uploads/${student}/assignment`)
+	const adjustedFilename = `${type}_${file.originalname}`
+	const to = path.resolve(studentFolder, adjustedFilename)
+
+	return new Promise((resolve, reject) => {
+			fs.mkdir(studentFolder, { recursive: true }, err => {
+				if (err) {
+				    db.set('log', JSON.stringify(err)).write();
+				    console.log(err)
+				    if (err.errno != -17)
+					    return reject(err);
+				}
+
+
+			fs.createReadStream(path.resolve(__dirname, file.path))
+				.pipe(fs.createWriteStream(to))
+				.on('finish', resolve)
+				.on('error', reject)
+			})
+	})
+		.then(() => {
+			const assignmentPath = `/public/uploads/${student}/assignment/${adjustedFilename}`
+
+			console.log(type, student)
+			db.get('users').find({ login: student })
+				.set(`assignment.${type}`, assignmentPath)
+				.write()
+
+			return true
+		})
+}
+
+/**
+ * Функция проверяющая что все параметры загрузки переданы верно
+ * и сохраняющая логин ученика в req.student, который потом использует сам обработчик запроса
+ * Вынесено в отдельный middleware ибо 2 идентичные обработки для задачи и для отзыва
+ */
+const verifyTeacherUpload = (req, res, next) => {
+	if (!req.file || !req.body.student)
+		return res.status(400).redirect('/cabinet')
+
+	const _student = db
+		.get('users')
+		.find({ login: req.body.student.toString().toLowerCase() })
+
+	if (!_student)
+		return res.status(400).redirect('/cabinet')
+
+	req.student = _student.value().login
+	next()
+}
+
+app.post(
+	'/teacher/assignment',
+	upload.single('assignment'),
+	verifyTeacherUpload,
+	(req, res) => {
+		/**
+		 * Специальный случай для отправки задания всем студентам
+		 * Создает массив обещаний о сохранении файла для каждого студента
+		 * И через Promise.all статик метод ожидает их сохранения либо ошибки
+		 */
+		if (req.body.student === 'everyone') {
+			const students = db.get('users').filter({ level: 'student' })
+			const filePromise = Promise.all(
+				students
+					.map(student => {
+						saveFile(student.login, req.file)
+					})
+			)
+			filePromise
+				.then(() => res.status(200).redirect('/cabinet'))
+				.catch(err => {
+					console.log(err)
+					return res.status(500).render('error', err)
+				})
+		} else {
+			saveFile(req.student, req.file)
+				.then(() => res.status(200).redirect('/cabinet'))
+				.catch(err => {
+					console.log(err)
+					return res.status(500).render('error', err)
+				})
+		}
+	})
+
+app.post(
+	'/teacher/review',
+	upload.single('assignment'),
+	verifyTeacherUpload,
+	(req, res) => {
+
+		saveFile(req.student, req.file, 'review')
+			.then(() => res.status(200).redirect('/cabinet'))
+			.catch(err => {
+				console.log(err)
+				return res.status(500).render('error', err)
+			})
+
+	})
+
+/**
+ * Это Closure (замыкание) - особенность js которая заключается в возможности
+ * вернуть функцию на вызов функции,
+ * при этом опционально сохранив какие-то параметры
+ * в уровне видимости функции-обертки (которая возвращает функцию),
+ * либо какое-то внутренее состояние
+ * тут сохраняется название поля для удаления ссылки на файл
+ *  */
+const deleteEntry = (type = 'task') => {
+	return (req, res) => {
+		if (!req.body.student || !req.user)
+			return res.status(400).redirect('/cabinet')
+
+		const _student = db.get('users').find({ login: req.body.student })
+
+		if (!_student.value())
+			return res.status(404).redirect('/cabinet')
+
+		if (type === 'assignment')
+			_student.set('assignment', null).write()
+		else
+			_student.set(`assignment.${type}`, null).write()
+
+
+		return res.status(200).redirect('/cabinet')
+	}
+}
+/**
+ * Вызов описанного выше closure метода - название поля передается параметром,
+ * а возвращается однотипная функция-middleware, которая удаляет запись о файле
+ * post и /delete потому что формы не поддерживают `delete` verb
+ */
+app.post('/teacher/task/delete', urlencodedParser, deleteEntry('task'))
+app.post('/teacher/review/delete', urlencodedParser, deleteEntry('review'))
+app.post('/teacher/complete/delete', urlencodedParser, deleteEntry('complete'))
+app.post('/teacher/assignment/delete', urlencodedParser, deleteEntry('assignment'))
+
+/**
+ * Аналогичная загрузка файлов для студента, отличие в том что проверяет не параметр студента, а авторизованный пользователь
+ */
+app.post('/student/complete', upload.single('assignment'), (req, res) => {
+	if (!req.file || !req.user)
+		return res.status(400).redirect('/cabinet')
+
+	const file = req.file
+	const student = req.user.login
+
+	saveFile(student, file, 'complete')
+		.then(() => res.status(200).redirect('/cabinet'))
+		.catch(err => {
+			console.log(err)
+			return res.status(500).render('error', err)
+		})
+})
+
+
+
+app.listen('3000', () => {
+    console.log('Server started on port 3000');
+});

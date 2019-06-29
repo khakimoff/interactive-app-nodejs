@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title><%= user.name %></title>
+    <link rel="shortcut icon" href="./public/img/favicon.ico">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="/public/css/style.css">
+  </head>
+  <body>
+    <% include block/header-сhild.ejs %>
+    <main class="child">
+    <div class="allTeacher">
+      <div class="leftBlock">
+        <div class="leftBlock_wrapper">
+          <div class="leftBlock_wrapper--firstRow">
+            <p>Предмет</p>
+            <!-- <p class="leftBlock_wrapperRightP">7A класс</p> -->
+          </div>
+          <div class="leftBlock_wrapper--secondRow">
+            <p>Полученое</br>задание</p>
+            <!-- <p>Выполненное</br>задание</p> -->
+            <p>Проверенное</br>задание</p>
+          </div>
+          <br/> <br/>
+
+          <div class="leftBlock_wrapper--chunk">
+            <p>Математика</p>
+            <p>
+              <% if (user.assignment && user.assignment.task) { %>
+              <a href="<%= user.assignment.task %>" rel="noreferre noopener" target="_blank">Задача</a>
+              <% } else { %>
+                Нет заданий
+              <% }%>
+            </p>
+            <p>
+              <% if (user.assignment && user.assignment.review) { %>
+              <a href="<%= user.assignment.review %>" rel="noreferre noopener" target="_blank">Отзыв учителя</a>
+              <% } else { %>
+                Отзыва пока нет
+              <% }%>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="rightBlock">
+        <div class="rightBlock_wrapper">
+          <div class="rightBlock_wrapper--firstRow">
+            <figure>
+              <img src="../public/img/iconTeather.png" alt="">
+              <figcaption>Ученик</figcaption>
+            </figure>
+            <h1><%= user.name %></h1>
+          </div>
+            <form method="post" action="/student/complete" method="post" enctype="multipart/form-data">
+              <div class="form-group">
+
+            <p>Класс</p>
+            <select>
+              <option selected disabled >Выбрать</option>
+              <option name ="Математика">Математика</option>
+              <option disabled name ="Русский язык">Русский языка</option>
+              <option disabled name ="Литература">Литература</option>
+              <option disabled name ="История">История</option>
+              <option disabled name ="География">География</option>
+              <option disabled name ="Информатика">Информатика</option>
+              <option disabled name ="Английский язык">Английский язык</option>
+            </select><br/><br/>
+            <label for="exampleFormControlFile1">Прикрепить</label>
+            <input type="file" name="assignment" class="form-control-file" id="exampleFormControlFile1">
+            <button type="submit" class="btn btn-primary" <%= user.assignment && user.assignment.task ? '' : 'disabled'%> >Отправить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+    <% include block/footer.ejs %>
+  </body>
+</html>

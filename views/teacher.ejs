@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+	<meta charset="utf-8">
+	<title><%= user.name %></title>
+	<link rel="shortcut icon" href="./public/img/favicon.ico">
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+		integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+	<link rel="stylesheet" href="/public/css/style.css">
+</head>
+
+<body>
+	<% include block/header-сhild.ejs %>
+	<script>
+		var __students = <%- JSON.stringify(students) %>
+	</script>
+	<main class="child">
+		<div class="allTeacher">
+			<div class="leftBlock">
+				<div class="leftBlock_wrapper">
+					<div class="leftBlock_wrapper--firstRow">
+						<p>Математика</p>
+						<p class="leftBlock_wrapperRightP">7A класс</p>
+					</div>
+					<div class="leftBlock_wrapper--secondRow">
+						<p>Отправленное</br>задание</p>
+						<p>Выполненное</br>задание</p>
+						<p>Проверенное</br>задание</p>
+					</div>
+					<% students
+						.filter(student =>
+							student.assignment &&
+							Object.values(student.assignment).some(a => a)
+							// проверка что есть хоть одно значение в файлах (при удалении запись ставится в null, чтобы не заморачиваться с полноценной очисткой assignment)
+						)
+						.forEach(student => { %>
+						<div class="leftBlock_wrapper--chunk">
+							<form action="/teacher/assignment/delete" method="post" enctype="application/x-www-form-urlencoded">
+								<p>
+									<%= student.name %>
+									<input type="hidden" name="student" value="<%= student.login %>" />
+									<button type="submit" class="remove-button">X</button>
+								</p>
+							</form>
+							<form action="/teacher/task/delete" method="post" enctype="application/x-www-form-urlencoded">
+							<p>
+								<% if (student.assignment.task) { %>
+								<a href="<%= student.assignment.task %>" rel="noreferre noopener" target="_blank">Задание</a>
+								<input type="hidden" name="student" value="<%= student.login %>" />
+								<button type="submit" class="remove-button">X</button>
+								<% } else { %>
+									Нет файла
+								<% }%>
+							</p>
+							</form>
+							<form action="/teacher/complete/delete" method="post" enctype="application/x-www-form-urlencoded">
+							<p>
+								<% if (student.assignment.complete) { %>
+								<a href="<%= student.assignment.complete %>" rel="noreferre noopener" target="_blank">Решение ученика</a>
+								<input type="hidden" name="student" value="<%= student.login %>" />
+								<button type="submit" class="remove-button">X</button>
+								<% } else { %>
+									Нет файла
+								<% }%>
+							</p>
+							</form>
+							<form action="/teacher/review/delete" method="post" enctype="application/x-www-form-urlencoded">
+							<p style="font-size: 10px; line-height: 1.7;">
+								<% if (student.assignment.review) { %>
+								<a href="<%= student.assignment.review %>" rel="noreferre noopener" target="_blank">Отзыв</a>
+								<input type="hidden" name="student" value="<%= student.login %>" />
+								<button type="submit" class="remove-button">X</button>
+								<% } else if (student.assignment.complete) { %>
+									<button
+										type="button"
+										data-student="<%= student.login %>"
+										class="attach-review"
+									>Отзыв</button type="button">
+								<% } else { %>
+									Ученик еще<br /> не выполнил<br /> задание
+								<% } %>
+							</p>
+							</form>
+						</div>
+					<% }); %>
+
+				</div>
+			</div>
+			<div class="rightBlock">
+				<div class="rightBlock_wrapper">
+					<div class="rightBlock_wrapper--firstRow">
+						<figure>
+							<img src="../public/img/iconTeather.png" alt="">
+							<figcaption>Учитель</figcaption>
+						</figure>
+						<h1><%= user.name %></h1>
+					</div>
+					<form action="/teacher/assignment" method="post" enctype="multipart/form-data">
+						<!-- <form method="post" action="/teacher-data"> -->
+						<div class="form-group teacher-form">
+							<h3>Добавить задание</h3>
+							<p>Класс</p>
+							<select name="class">
+								<option selected disabled>Выбрать класс</option>
+								<option name="7A">7А</option>
+								<option name="7Б" disabled>7Б</option>
+								<option name="7В" disabled>7В</option>
+							</select><br /><br />
+							<p>Ученик</p>
+
+							<select name="student">
+								<option selected disabled>Выбрать ученика</option>
+								<!-- <option name="everyone">Все ученики</option> -->
+								<% students.forEach(student => { %>
+									<option value="<%= student.login %>"><%= student.name %></option>
+								<% }); %>
+							</select>
+							<br />
+							<br />
+
+							<%# <p>Тип</p> %>
+							<!-- <select> -->
+							<!-- <option selected disabled>Выбрать</option> -->
+							<!-- <option>Отправить задания</option> -->
+							<!-- <option>Отпраивть проверенное задание</option> -->
+							<!-- </select><br/><br/> -->
+							<label for="exampleFormControlFile1">Прикрепить</label>
+							<input type="file" name="assignment" class="form-control-file" id="exampleFormControlFile1">
+							<button type="submit" class="btn btn-primary">Отправить</button>
+						</div>
+					</form>
+				</div>
+			</div>
+	</main>
+	<script src="/public/js/main.js" ></script>
+	<% include block/footer.ejs %>
+</body>
+
+</html>
